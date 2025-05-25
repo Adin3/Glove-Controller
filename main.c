@@ -3,6 +3,7 @@
 #include <util/delay.h>
 #include <stdio.h>
 
+#define MPU_ADDR 0x68
 #define QMC5883L_ADDR 0x0D
 
 void TWI_init(void) {
@@ -77,18 +78,75 @@ void QMC5883L_read(int16_t* mx, int16_t* my, int16_t* mz) {
     *mz = (int16_t)((zh << 8) | zl);
 }
 
+void MPU6500_init(void) {
+    TWI_start();
+    TWI_write(MPU_ADDR << 1);
+    TWI_write(0x6B);
+    TWI_write(0x00);
+    TWI_stop();
+}
+
+void MPU6500_read(int16_t* ax, int16_t* ay, int16_t* az,
+                      int16_t* gx, int16_t* gy, int16_t* gz) {
+    TWI_start();
+    TWI_write(MPU_ADDR << 1);
+    TWI_write(0x3B);
+    TWI_start();
+    TWI_write((MPU_ADDR << 1) | 1);
+
+    uint8_t axh = TWI_read(1);
+    uint8_t axl = TWI_read(1);
+    uint8_t ayh = TWI_read(1);
+    uint8_t ayl = TWI_read(1);
+    uint8_t azh = TWI_read(1);
+    uint8_t azl = TWI_read(1);
+
+    *ax = (int16_t)((axh << 8) | axl);         
+    *ay = (int16_t)((ayh << 8) | ayl);
+    *az = (int16_t)((azh << 8) | azl);
+
+    TWI_read(1);
+    TWI_read(1);
+
+    uint8_t gxh = TWI_read(1);
+    uint8_t gxl = TWI_read(1);
+    uint8_t gyh = TWI_read(1);
+    uint8_t gyl = TWI_read(1);
+    uint8_t gzh = TWI_read(1);
+    uint8_t gzl = TWI_read(0);
+
+    *gx = (int16_t)((gxh << 8) | gxl);
+    *gy = (int16_t)((gyh << 8) | gyl);
+    *gz = (int16_t)((gzh << 8) | gzl);
+
+    TWI_stop();
+}
+
 int main(void) {
     USART_init(103);
     TWI_init();
     QMC5883L_init();
 
+    int16_t ax, ay, az, gx, gy, gz;
     int16_t mx, my, mz;
-    char buffer[64];
+    char buffer[128];
 
     while (1) {
+        MPU6500_read(&ax, &ay, &az, &gx, &gy, &gz);
         QMC5883L_read(&mx, &my, &mz);
-        sprintf(buffer, "M: %d %d %d \r\n", mx, my, mz);
+
+        float axn = ax / 16384.0;
+        float ayn = ay / 16384.0;
+        float azn = az / 16384.0;
+
+        float gxn = gx / 131.0;
+        float gyn = gy / 131.0;
+        float gzn = gz / 131.0;
+
+        sprintf(buffer,
+            "A: %.2f %.2f %.2f g | G: %.2f %.2f %.2f dps | M: %d %d %d\r\n",
+            axn, ayn, azn, gxn, gyn, gzn, mx, my, mz);
         USART_print(buffer);
-        _delay_ms(500);
+        _delay_ms(100);
     }
 }

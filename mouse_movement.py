@@ -12,3 +12,6 @@ class MouseMovement:
 
     def move(self, posX, posY, time = 0):
         pyautogui.moveRel(posX, posY, time)
+
+    def click(self):
+        pyautogui.click()
